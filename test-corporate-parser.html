@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Corporate Parser</title>
+    <script src="/static/corporate-parser.js"></script>
+</head>
+<body>
+    <h1>Testing Corporate Parser</h1>
+    <button onclick="testGoogleSheets()">Test Google Sheets</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testGoogleSheets() {
+            const parser = new CorporateDocumentParser();
+            
+            // Fetch Google Sheets CSV
+            const sheetId = '15o26CMkMG_73ZhrlwlyR06vH2BDYhfu1DYkelcG_C44';
+            const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+            
+            try {
+                const response = await fetch('/api/import-google-sheets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit` 
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const structure = parser.parseTableStructure(result.csv);
+                    
+                    // Count employees
+                    function countEmployees(node) {
+                        let count = 1;
+                        if (node.children && node.children.length > 0) {
+                            for (const child of node.children) {
+                                count += countEmployees(child);
+                            }
+                        }
+                        return count;
+                    }
+                    
+                    const employeeCount = structure ? countEmployees(structure) : 0;
+                    
+                    document.getElementById('result').innerHTML = `
+                        <h2>Результат парсинга:</h2>
+                        <p>Найдено сотрудников: ${employeeCount}</p>
+                        <pre>${JSON.stringify(structure, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('result').innerHTML = 'Ошибка загрузки CSV';
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = 'Ошибка: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
