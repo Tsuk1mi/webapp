@@ -32,16 +32,24 @@ class ProfessionalOrgParser {
         const employees = [];
         const nodeMap = new Map();
         const vacancies = [];
-        
-        // Определяем индексы колонок
+
+        // Табличные данные должны содержать следующие колонки:
+        // ID | Подчиненность | Подразделение | Должность | ФИО
         const cols = {
-            code: this.findColumn(headers, ['подчиненность', 'код', 'subordination', '№']),
-            dept: this.findColumn(headers, ['подразделение', 'отдел', 'department', 'структура']),
-            position: this.findColumn(headers, ['должность', 'position', 'title', 'роль']),
-            name: this.findColumn(headers, ['фио', 'сотрудник', 'name', 'ф.и.о.', 'фамилия']),
-            func: this.findColumn(headers, ['функционал', 'обязанности', 'функции', 'описание'])
+            id: headers.findIndex(h => h.toLowerCase().includes('id') || h === 'ID' || h === '№'),
+            subordination: headers.findIndex(h => h.toLowerCase().includes('подчиненность')),
+            dept: headers.findIndex(h => h.toLowerCase().includes('подразделение')),
+            position: headers.findIndex(h => h.toLowerCase().includes('должность')),
+            name: headers.findIndex(h => h.toLowerCase().includes('фио'))
         };
-        
+
+        // Если колонки не найдены, используем фиксированные индексы
+        if (cols.id === -1) cols.id = 0;
+        if (cols.subordination === -1) cols.subordination = 1;
+        if (cols.dept === -1) cols.dept = 2;
+        if (cols.position === -1) cols.position = 3;
+        if (cols.name === -1) cols.name = 4;
+
         console.log('Column mapping:', cols);
         
         // Обрабатываем строки данных
@@ -49,24 +57,27 @@ class ProfessionalOrgParser {
             const row = rows[i];
             if (!row || row.length === 0) continue;
             
-            const code = cols.code >= 0 ? row[cols.code] : `${i}`;
-            const position = cols.position >= 0 ? row[cols.position] : '';
-            const name = cols.name >= 0 ? row[cols.name] : '';
-            const dept = cols.dept >= 0 ? row[cols.dept] : '';
-            const func = cols.func >= 0 ? row[cols.func] : '';
-            
+            const id = row[cols.id] || `${i}`;
+            const subordination = row[cols.subordination] || '';
+            const position = row[cols.position] || '';
+            const name = row[cols.name] || '';
+            const dept = row[cols.dept] || '';
+
+            // Пропускаем пустые строки
+            if (!id && !name && !position && !dept) continue;
+
             // Проверяем на вакансию
             const isVacancy = this.isVacancy(name, position);
             
             const employee = {
-                id: `node-${i}`,
-                code: code || `${i}`,
+                id: `node-${id}`,
+                code: id,
+                subordination: subordination,
                 department: dept,
                 position: position || 'Сотрудник',
                 name: isVacancy ? 'ВАКАНСИЯ' : (name || 'Не указано'),
-                functional: func,
                 isVacancy: isVacancy,
-                level: this.calculateLevel(code),
+                level: 0,
                 children: []
             };
             
@@ -78,12 +89,12 @@ class ProfessionalOrgParser {
             }
             
             employees.push(employee);
-            nodeMap.set(employee.code, employee);
+            nodeMap.set(id, employee);
+            console.log(`Added employee: ${employee.name} (ID: ${id}, Reports to: ${subordination})`);
         }
         
         console.log(`Parsed ${employees.length} employees, ${vacancies.length} vacancies`);
         
-        // Строим иерархию
         return this.buildHierarchy(employees, nodeMap);
     }
 
@@ -295,14 +306,22 @@ class ProfessionalOrgParser {
         return this.parseDOCX(content);
     }
 
-    // Улучшенный парсер CSV
+    // Улучшенный парсер CSV/TSV
     parseCSVAdvanced(text) {
+        console.log('Raw text:', text.substring(0, 100) + '...');
         const rows = [];
         const lines = text.split(/\r?\n/);
         
         for (const line of lines) {
             if (!line.trim()) continue;
             
+            // Проверяем, разделены ли данные табуляцией
+            if (line.includes('\t')) {
+                rows.push(line.split('\t').map(cell => cell.trim()));
+                continue;
+            }
+
+            // Стандартная обработка CSV
             const row = [];
             let current = '';
             let inQuotes = false;
@@ -318,7 +337,7 @@ class ProfessionalOrgParser {
                     } else {
                         inQuotes = !inQuotes;
                     }
-                } else if (char === ',' && !inQuotes) {
+                } else if ((char === ',' || char === ';') && !inQuotes) {
                     row.push(current.trim());
                     current = '';
                 } else {
@@ -330,6 +349,8 @@ class ProfessionalOrgParser {
             rows.push(row);
         }
         
+        console.log('First row:', rows[0]);
+        console.log('Second row:', rows[1]);
         return rows;
     }
 
@@ -399,40 +420,65 @@ class ProfessionalOrgParser {
 
     // Построение иерархии с учетом кодов подчиненности
     buildHierarchy(employees, nodeMap) {
+        console.log('Building hierarchy...');
         const roots = [];
         
+        // Строим иерархию на основе подчиненности
         for (const employee of employees) {
-            const code = employee.code;
-            
-            if (!code || code === '1' || !code.includes('.')) {
+            const subordinationId = employee.subordination;
+
+            if (!subordinationId || subordinationId.trim() === '') {
+                console.log(`Root node found: ${employee.name} (ID: ${employee.code})`);
                 roots.push(employee);
             } else {
-                // Ищем родителя по коду
-                const parts = code.split('.');
-                let parentCode = parts.slice(0, -1).join('.');
-                
-                while (parentCode && !nodeMap.has(parentCode)) {
-                    const parentParts = parentCode.split('.');
-                    if (parentParts.length > 1) {
-                        parentCode = parentParts.slice(0, -1).join('.');
-                    } else {
-                        parentCode = null;
+                // Находим руководителя по ID
+                const manager = nodeMap.get(subordinationId);
+                if (manager) {
+                    console.log(`Adding ${employee.name} (ID: ${employee.code}) to ${manager.name} (ID: ${manager.code})`);
+                    if (!manager.children) {
+                        manager.children = [];
                     }
-                }
-                
-                if (parentCode && nodeMap.has(parentCode)) {
-                    const parent = nodeMap.get(parentCode);
-                    parent.children.push(employee);
+                    manager.children.push(employee);
                 } else {
+                    console.warn(`Manager not found for ${employee.name} (ID: ${employee.code}, Manager ID: ${subordinationId})`);
                     roots.push(employee);
                 }
             }
         }
-        
+
+        console.log(`Found ${roots.length} root nodes`);
+
+        // Сортируем детей по уровню и имени
+        const sortChildren = (node) => {
+            if (node.children && node.children.length > 0) {
+                node.children.sort((a, b) => {
+                    if (a.code !== b.code) {
+                        return parseInt(a.code) - parseInt(b.code);
+                    }
+                    return (a.name || '').localeCompare(b.name || '');
+                });
+                node.children.forEach(sortChildren);
+            }
+        };
+
+        // Сортируем корневые узлы
+        roots.sort((a, b) => {
+            if (a.code !== b.code) {
+                return parseInt(a.code) - parseInt(b.code);
+            }
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
+        roots.forEach(sortChildren);
+
+        // Если есть только один корневой узел, возвращаем его
         if (roots.length === 1) {
+            console.log('Returning single root node');
             return roots[0];
         }
         
+        // Если несколько корневых узлов, создаем виртуальный корневой узел
+        console.log('Creating virtual root node with multiple children');
         return {
             id: 'root',
             name: 'Организация',
@@ -724,3 +770,4 @@ class ProfessionalOrgParser {
 
 // Экспорт в глобальную область
 window.ProfessionalOrgParser = ProfessionalOrgParser;
+

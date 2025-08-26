@@ -58,7 +58,7 @@ class EnhancedDocumentParser {
         console.log(`Created ${nodes.length} nodes`);
 
         // Build hierarchy based on subordination codes
-        return this.buildHierarchyFromSubordination(nodes, nodeMap);
+        return this.buildHierarchyFromSubordination(nodes);
     }
 
     // Parse CSV line handling quotes properly
@@ -97,58 +97,60 @@ class EnhancedDocumentParser {
     }
 
     // Build hierarchy from subordination codes
-    buildHierarchyFromSubordination(nodes, nodeMap) {
+    buildHierarchyFromSubordination(nodes) {
         const roots = [];
-        const processed = new Set();
+        const nodeMap = new Map();
 
-        // First, identify root nodes (00, 0, or nodes without parent)
+        // Создаем карту узлов по ID
         nodes.forEach(node => {
-            if (node.subordination === '00' || node.subordination === '0' || !node.subordination) {
-                roots.push(node);
-                processed.add(node.subordination);
-            }
+            node.id = node.rawData[0]; // ID из первой колонки
+            node.children = [];
+            nodeMap.set(node.id, node);
         });
 
-        // Build parent-child relationships
+        // Строим иерархию
         nodes.forEach(node => {
-            if (processed.has(node.subordination)) return;
-
-            // Find parent based on subordination pattern
-            let parent = this.findParentNode(node.subordination, nodeMap, nodes);
-            
-            if (parent && parent !== node) {
-                if (!parent.children) parent.children = [];
-                parent.children.push(node);
-                processed.add(node.subordination);
-            } else if (!roots.includes(node)) {
-                // If no parent found, check if it should be a root
-                const subNum = parseInt(node.subordination);
-                if (subNum && subNum < 10) {
-                    roots.push(node);
-                } else {
-                    // Find closest parent by number
-                    const closestParent = this.findClosestParent(node, nodes);
-                    if (closestParent) {
-                        if (!closestParent.children) closestParent.children = [];
-                        closestParent.children.push(node);
-                    } else {
-                        roots.push(node);
-                    }
+            const parentId = node.rawData[1]; // Подчиненность из второй колонки
+            if (!parentId || parentId.trim() === '') {
+                // Если нет родителя, это корневой узел
+                roots.push(node);
+            } else {
+                // Находим родителя и добавляем текущий узел как его ребенка
+                const parent = nodeMap.get(parentId);
+                if (parent) {
+                    parent.children.push(node);
                 }
             }
         });
 
-        // Create final structure
-        const organization = {
-            id: 'root',
-            name: 'Организация',
-            position: '',
-            department: '',
-            children: roots
+        // Преобразуем узлы в требуемый формат
+        const transformNode = (node) => {
+            return {
+                id: node.id,
+                name: node.rawData[4] || '', // ФИО
+                title: node.rawData[3] || '', // Должность
+                department: node.rawData[2] || '', // Подразделение
+                children: node.children.map(child => transformNode(child))
+            };
         };
 
-        console.log(`Built hierarchy with ${roots.length} root nodes`);
-        return this.optimizeStructure(organization);
+        // Если есть только один корневой узел, возвращаем его
+        if (roots.length === 1) {
+            return {
+                success: true,
+                data: transformNode(roots[0])
+            };
+        }
+
+        // Если несколько корневых узлов, создаем виртуальный корневой узел
+        return {
+            success: true,
+            data: {
+                id: 'root',
+                name: 'Организация',
+                children: roots.map(root => transformNode(root))
+            }
+        };
     }
 
     // Find parent node based on subordination code
@@ -733,3 +735,4 @@ class EnhancedDocumentParser {
 
 // Export for global use
 window.EnhancedDocumentParser = EnhancedDocumentParser;
+
