@@ -158,6 +158,10 @@ class D3OrgChart {
             }
             .node-title {
                 font-size: 12px;
+                fill: #374151;
+            }
+            .node-department {
+                font-size: 11px;
                 fill: #6B7280;
             }
             @keyframes fadeIn {
@@ -199,8 +203,8 @@ class D3OrgChart {
         const height = this.height - margin.top - margin.bottom;
 
         const treeLayout = d3.tree()
-            .size([height, width])
-            .separation((a, b) => (a.parent === b.parent ? 1 : 1.5));
+            .nodeSize([90, 220])
+            .separation((a, b) => (a.parent === b.parent ? 1 : 1.2));
 
         treeLayout(this.root);
 
@@ -231,10 +235,10 @@ class D3OrgChart {
 
         // Add rectangles
         nodes.append('rect')
-            .attr('x', -75)
-            .attr('y', -25)
-            .attr('width', 150)
-            .attr('height', 50)
+            .attr('x', -100)
+            .attr('y', -35)
+            .attr('width', 200)
+            .attr('height', 70)
             .attr('rx', 8)
             .attr('fill', d => this.getNodeColor(d))
             .attr('stroke', '#fff')
@@ -243,16 +247,23 @@ class D3OrgChart {
         // Add text - name
         nodes.append('text')
             .attr('class', 'node-name')
-            .attr('dy', -5)
+            .attr('dy', -8)
             .attr('text-anchor', 'middle')
-            .text(d => this.truncateText(d.data.name, 20));
+            .text(d => this.truncateText(d.data.name, 22));
 
         // Add text - title
         nodes.append('text')
             .attr('class', 'node-title')
-            .attr('dy', 10)
+            .attr('dy', 8)
             .attr('text-anchor', 'middle')
-            .text(d => this.truncateText(d.data.title, 25));
+            .text(d => this.truncateText(d.data.title || d.data.position, 26));
+
+        // Add department line
+        nodes.append('text')
+            .attr('class', 'node-department')
+            .attr('dy', 22)
+            .attr('text-anchor', 'middle')
+            .text(d => this.truncateText(d.data.department, 28));
 
         // Add expand/collapse indicator
         nodes.filter(d => d.children || d._children)
@@ -280,8 +291,8 @@ class D3OrgChart {
         const height = this.height - margin.top - margin.bottom;
 
         const treeLayout = d3.tree()
-            .size([width, height])
-            .separation((a, b) => (a.parent === b.parent ? 1 : 1.5));
+            .nodeSize([200, 100])
+            .separation((a, b) => (a.parent === b.parent ? 1 : 1.2));
 
         treeLayout(this.root);
 
@@ -312,10 +323,10 @@ class D3OrgChart {
 
         // Add rectangles
         nodes.append('rect')
-            .attr('x', -75)
-            .attr('y', -25)
-            .attr('width', 150)
-            .attr('height', 50)
+            .attr('x', -100)
+            .attr('y', -35)
+            .attr('width', 200)
+            .attr('height', 70)
             .attr('rx', 8)
             .attr('fill', d => this.getNodeColor(d))
             .attr('stroke', '#fff')
@@ -324,15 +335,22 @@ class D3OrgChart {
         // Add text
         nodes.append('text')
             .attr('class', 'node-name')
-            .attr('dy', -5)
+            .attr('dy', -8)
             .attr('text-anchor', 'middle')
-            .text(d => this.truncateText(d.data.name, 20));
+            .text(d => this.truncateText(d.data.name, 22));
 
         nodes.append('text')
             .attr('class', 'node-title')
-            .attr('dy', 10)
+            .attr('dy', 8)
             .attr('text-anchor', 'middle')
-            .text(d => this.truncateText(d.data.title, 25));
+            .text(d => this.truncateText(d.data.title || d.data.position, 26));
+
+        // Add department line
+        nodes.append('text')
+            .attr('class', 'node-department')
+            .attr('dy', 22)
+            .attr('text-anchor', 'middle')
+            .text(d => this.truncateText(d.data.department, 28));
     }
 
     renderRadialTree() {
@@ -423,8 +441,11 @@ class D3OrgChart {
 
     showTooltip(event, node) {
         let content = `<strong>${node.data.name}</strong>`;
-        if (node.data.title) {
-            content += `<br><em>${node.data.title}</em>`;
+        if (node.data.title || node.data.position) {
+            content += `<br><em>${node.data.title || node.data.position}</em>`;
+        }
+        if (node.data.department) {
+            content += `<br><i class=\"fas fa-building\"></i> ${node.data.department}`;
         }
         if (node.data.email) {
             content += `<br><i class="fas fa-envelope"></i> ${node.data.email}`;
@@ -515,7 +536,8 @@ class D3OrgChart {
         if (!this.searchTerm) return true;
         const name = (node.data.name || '').toLowerCase();
         const title = (node.data.title || '').toLowerCase();
-        return name.includes(this.searchTerm) || title.includes(this.searchTerm);
+        const position = (node.data.position || '').toLowerCase();
+        return name.includes(this.searchTerm) || title.includes(this.searchTerm) || position.includes(this.searchTerm);
     }
 
     exportSVG() {
