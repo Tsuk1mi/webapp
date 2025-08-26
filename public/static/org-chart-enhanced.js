@@ -408,9 +408,21 @@ async function importFromGoogleSheets() {
         const result = await response.json();
         
         if (result.success) {
-            currentStructure = result.data;
-            renderEnhancedChart(result.data);
-            generateTable(result.data);
+            // Parse CSV from Google Sheets with professional parser
+            if (!professionalParser) {
+                showError('Парсер не инициализирован');
+                return;
+            }
+            const structure = await professionalParser.parseSpreadsheet(result.csv || '');
+            if (!structure) {
+                showError('Не удалось распарсить данные из Google Sheets');
+                return;
+            }
+            currentStructure = structure;
+            renderEnhancedChart(structure);
+            // Build enhanced table with department and position
+            const tableHtml = professionalParser.createHTMLTable(structure);
+            displayEnhancedTable(tableHtml);
             showChartContainer(true);
             showSuccess('Данные успешно импортированы из Google Sheets');
         } else {
