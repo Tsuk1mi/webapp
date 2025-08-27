@@ -12,8 +12,7 @@
 .idea/shelf
 
 # deps
-node_modules/
-.wrangler
+.node_modules/
 
 # env
 .env
