@@ -11,10 +11,6 @@
   - Subordination code-based hierarchy building
   - Support for 100+ employee structures
 
-## URLs
-- **Production**: https://3000-i0dopoq9stmpmvbxc3qq4-6532622b.e2b.dev
-- **GitHub**: Not yet deployed
-
 ## Currently Completed Features
 1. ✅ Basic file upload interface with drag-and-drop
 2. ✅ Document parsing infrastructure for multiple formats
